@@ -1,23 +1,37 @@
-import logo from './logo.svg';
-import './App.css';
+import { collection, addDoc, getDocs } from "firebase/firestore";
+import { db } from "./firebase";
 
 function App() {
+
+  const addTestData = async () => {
+    await addDoc(collection(db, "test"), {
+      message: "Hello Firestore!",
+      createdAt: new Date()
+    });
+    alert("Data added to Firestore!");
+  };
+
+  const readTestData = async () => {
+    const querySnapshot = await getDocs(collection(db, "test"));
+    querySnapshot.forEach((doc) => {
+      console.log(doc.id, "=>", doc.data());
+    });
+    alert("Check the console for Firestore data");
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div style={{ padding: "20px" }}>
+      <h1>🔥 Firestore Test</h1>
+
+      <button onClick={addTestData}>
+        Add Test Data
+      </button>
+
+      <br /><br />
+
+      <button onClick={readTestData}>
+        Read Test Data
+      </button>
     </div>
   );
 }
