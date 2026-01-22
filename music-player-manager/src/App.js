@@ -21,7 +21,8 @@ function App() {
 
   return (
     <div style={{ padding: "20px" }}>
-      <h1>🔥 Firestore Test</h1>
+      <h1>🎵 Music Player Manager</h1>
+      <p>React, JavaScript, and Firestore are running.</p>
 
       <button onClick={addTestData}>
         Add Test Data
