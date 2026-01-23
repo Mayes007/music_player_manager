@@ -92,7 +92,7 @@ export default function MusicPlayer() {
         <input name="artist" placeholder="Artist" required />
         <input
           type="file"
-          accept="audio/mp3"
+          accept="audio/*"
           onChange={(e) => setFile(e.target.files[0])}
           required
         />
