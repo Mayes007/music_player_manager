@@ -79,23 +79,61 @@ export default function MusicPlayer() {
     }
   }, [currentSong, isPlaying]);
 
-  // --- ACTIONS ---
+// --- ACTIONS ---
   const uploadSong = async (e) => {
     e.preventDefault();
-    if (!file || !user) return;
+    
+    // 1. Safety check: Ensure both a file is selected and a user is logged in
+    if (!file || !user) {
+      alert("Please select a file and ensure you are logged in.");
+      return;
+    }
+
     const title = e.target.title.value;
     const artist = e.target.artist.value;
-    const fileRef = ref(storage, `songs/${user.uid}/${Date.now()}-${file.name}`);
-    await uploadBytes(fileRef, file);
-    const audioUrl = await getDownloadURL(fileRef);
 
-    const docRef = await addDoc(songsRef, {
-      title, artist, audioUrl, userId: user.uid, isFavorite: false, createdAt: new Date()
-    });
+    try {
+      // 2. Create a unique path for the song in Firebase Storage
+      const fileRef = ref(storage, `songs/${user.uid}/${Date.now()}-${file.name}`);
+      
+      // 3. Upload the actual file bytes to Storage
+      await uploadBytes(fileRef, file);
+      
+      // 4. Get the public download URL so the browser can play it
+      const audioUrl = await getDownloadURL(fileRef);
 
-    setSongs([{ id: docRef.id, title, artist, audioUrl, isFavorite: false }, ...songs]);
-    e.target.reset();
-    setFile(null);
+      // 5. Save the song details and the URL to Firestore
+      const docRef = await addDoc(songsRef, {
+        title,
+        artist,
+        audioUrl,
+        userId: user.uid, // Required for security rules and indexing
+        isFavorite: false,
+        createdAt: new Date()
+      });
+
+      // 6. Update the local state list so the song appears immediately
+      const newSong = { 
+        id: docRef.id, 
+        title, 
+        artist, 
+        audioUrl, 
+        userId: user.uid,
+        isFavorite: false,
+        createdAt: new Date()
+      };
+      
+      setSongs((prevSongs) => [newSong, ...prevSongs]);
+
+      // 7. Reset the form and the file state
+      e.target.reset();
+      setFile(null);
+      alert("Upload successful!");
+      
+    } catch (error) {
+      console.error("Upload error details:", error);
+      alert("Upload failed. Make sure you have created the Firestore Index and updated Storage Rules.");
+    }
   };
 
   const deleteSong = async (songId, audioUrl) => {
