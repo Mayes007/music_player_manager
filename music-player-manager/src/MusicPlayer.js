@@ -32,9 +32,13 @@ export default function MusicPlayer() {
   // Load songs from Firestore
   useEffect(() => {
     const loadSongs = async () => {
-      const q = query(songsRef, orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      setSongs(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      try {
+        const q = query(songsRef, orderBy("createdAt", "desc"));
+        const snapshot = await getDocs(q);
+        setSongs(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (error) {
+        console.error("Error loading songs:", error);
+      }
     };
     loadSongs();
   }, []);
@@ -43,50 +47,49 @@ export default function MusicPlayer() {
   useEffect(() => {
     if (currentSong && audioRef.current) {
       audioRef.current.src = currentSong.audioUrl;
-      if (isPlaying) audioRef.current.play().catch(console.error);
+      if (isPlaying) {
+        audioRef.current.play().catch(console.error);
+      }
     }
   }, [currentSong]);
 
-  // Upload song to Firebase Storage and Firestore
   const uploadSong = async (e) => {
     e.preventDefault();
     if (!file) return;
 
     setIsUploading(true);
     try {
-      // Extract metadata
       const metadata = await mm.parseBlob(file);
       const title = metadata.common.title || file.name.replace(/\.[^/.]+$/, "");
       const artist = metadata.common.artist || "Unknown Artist";
 
-      // Upload to Firebase Storage
       const filePath = `songs/${Date.now()}-${file.name}`;
       const fileRef = ref(storage, filePath);
       await uploadBytes(fileRef, file);
       const audioUrl = await getDownloadURL(fileRef);
 
-      // Save to Firestore
       const docData = { title, artist, audioUrl, filePath, createdAt: new Date() };
       const docRef = await addDoc(songsRef, docData);
 
-      // Update UI
       setSongs((prev) => [{ id: docRef.id, ...docData }, ...prev]);
       setFile(null);
       e.target.reset();
     } catch (error) {
       console.error(error);
-      alert("Failed to upload song.");
+      alert("Failed to upload song. Check your Firebase Storage Rules!");
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Play or pause a song
   const togglePlay = useCallback(
     (song) => {
       if (currentSong?.id === song.id) {
-        if (isPlaying) audioRef.current.pause();
-        else audioRef.current.play();
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play();
+        }
         setIsPlaying(!isPlaying);
       } else {
         setCurrentSong(song);
@@ -96,8 +99,8 @@ export default function MusicPlayer() {
     [currentSong, isPlaying]
   );
 
-  // Delete song
-  const deleteSong = async (song) => {
+  const deleteSong = async (song, e) => {
+    e.stopPropagation(); // Prevents playing the song when clicking delete
     if (!window.confirm(`Delete "${song.title}"?`)) return;
     try {
       await deleteObject(ref(storage, song.filePath));
@@ -115,30 +118,35 @@ export default function MusicPlayer() {
 
   return (
     <div className={styles.container}>
-      <h1>🎶 Music Player Manager</h1>
+      <header className={styles.header}>
+        <h1>🎶 Music Player Manager</h1>
+      </header>
 
-      <form onSubmit={uploadSong} className={styles.uploadForm}>
-        <input
-          type="file"
-          accept="audio/*"
-          onChange={(e) => setFile(e.target.files[0])}
-          disabled={isUploading}
-          required
-        />
-        <button type="submit" disabled={isUploading}>
-          {isUploading ? "Uploading..." : "Upload"}
-        </button>
-      </form>
+      <div className={styles.uploadSection}>
+        <form onSubmit={uploadSong} className={styles.uploadForm}>
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={(e) => setFile(e.target.files[0])}
+            disabled={isUploading}
+            required
+            className={styles.fileInput}
+          />
+          <button type="submit" className={styles.button} disabled={isUploading}>
+            {isUploading ? "Uploading..." : "Upload Song"}
+          </button>
+        </form>
+      </div>
 
       <input
         type="text"
         placeholder="Search your library..."
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        className={styles.searchInput}
+        className={styles.searchBar}
       />
 
-      <ul className={styles.list}>
+      <div className={styles.songList}>
         {songs
           .filter(
             (s) =>
@@ -146,21 +154,43 @@ export default function MusicPlayer() {
               s.artist.toLowerCase().includes(searchTerm.toLowerCase())
           )
           .map((song) => (
-            <li key={song.id} className={styles.listItem}>
-              <div onClick={() => togglePlay(song)} className={styles.songInfo}>
-                <strong>
-                  {currentSong?.id === song.id && isPlaying ? "⏸ " : "▶ "} {song.title}
-                </strong>
-                <span className={styles.artist}>{song.artist}</span>
+            <div 
+              key={song.id} 
+              className={`${styles.songItem} ${currentSong?.id === song.id ? styles.active : ""}`}
+              onClick={() => togglePlay(song)}
+            >
+              <div className={styles.songInfo}>
+                <span className={styles.playIcon}>
+                  {currentSong?.id === song.id && isPlaying ? "⏸" : "▶"}
+                </span>
+                <div>
+                  <h4 className={styles.songTitle}>{song.title}</h4>
+                  <p className={styles.songArtist}>{song.artist}</p>
+                </div>
               </div>
-              <button onClick={() => deleteSong(song)} className={styles.deleteBtn}>
+              <button onClick={(e) => deleteSong(song, e)} className={styles.deleteBtn}>
                 ✕
               </button>
-            </li>
+            </div>
           ))}
-      </ul>
+      </div>
 
-      <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
+      {/* Persistent Audio Player Bar */}
+      {currentSong && (
+        <div className={styles.audioControls}>
+          <div className={styles.nowPlayingInfo}>
+            <strong>{currentSong.title}</strong>
+            <span>{currentSong.artist}</span>
+          </div>
+          <audio 
+            ref={audioRef} 
+            controls 
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => setIsPlaying(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }
