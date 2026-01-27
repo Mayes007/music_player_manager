@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { db, storage } from "./firebase"; 
 import {
   collection, addDoc, getDocs, orderBy, query,
-  deleteDoc, doc, updateDoc
+  deleteDoc, doc
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import * as mm from 'music-metadata-browser';
 
 const songsRef = collection(db, "songs");
 
@@ -13,14 +14,12 @@ export default function MusicPlayer() {
   const [file, setFile] = useState(null);
   const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [isUploading, setIsUploading] = useState(false); // New loading state
   const [searchTerm, setSearchTerm] = useState("");
 
   const audioRef = useRef(null);
 
-  // --- FETCH ALL SONGS (No User Filter) ---
+  // 1. Fetch songs on mount
   useEffect(() => {
     const fetchSongs = async () => {
       const q = query(songsRef, orderBy("createdAt", "desc"));
@@ -30,44 +29,64 @@ export default function MusicPlayer() {
     fetchSongs();
   }, []);
 
-  // --- SIMPLIFIED UPLOAD ---
+  // 2. Handle Audio Source Changes
+  useEffect(() => {
+    if (currentSong && audioRef.current) {
+      audioRef.current.src = currentSong.audioUrl;
+      if (isPlaying) {
+        audioRef.current.play().catch(err => console.error("Playback failed", err));
+      }
+    }
+  }, [currentSong]);
+
+  // --- AUTOMATED UPLOAD ---
   const uploadSong = async (e) => {
     e.preventDefault();
-    if (!file) {
-      alert("Please select a file first!");
-      return;
-    }
+    if (!file) return alert("Please select a file first!");
 
-    const title = e.target.title.value;
-    const artist = e.target.artist.value;
+    setIsUploading(true);
 
     try {
-      // Path no longer uses user.uid
+      // Extract Metadata automatically
+      const metadata = await mm.parseBlob(file);
+      const title = metadata.common.title || file.name.replace(/\.[^/.]+$/, "");
+      const artist = metadata.common.artist || "Unknown Artist";
+
+      // Upload file to Firebase Storage
       const fileRef = ref(storage, `public_songs/${Date.now()}-${file.name}`);
       await uploadBytes(fileRef, file);
       const audioUrl = await getDownloadURL(fileRef);
 
-      const docRef = await addDoc(songsRef, {
+      // Save to Firestore
+      const docData = {
         title,
         artist,
         audioUrl,
         createdAt: new Date()
-      });
+      };
+      
+      const docRef = await addDoc(songsRef, docData);
 
-      setSongs([{ id: docRef.id, title, artist, audioUrl }, ...songs]);
-      e.target.reset();
+      // Update local UI
+      setSongs([{ id: docRef.id, ...docData }, ...songs]);
       setFile(null);
-      alert("Uploaded!");
+      e.target.reset();
+      alert(`Success! Added "${title}" by ${artist}`);
     } catch (error) {
       console.error(error);
-      alert("Upload failed. Check your Firebase Rules!");
+      alert("Error processing file or uploading.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  // --- CONTROLS ---
   const togglePlay = useCallback((song) => {
     if (currentSong?.id === song.id) {
-      isPlaying ? audioRef.current.pause() : audioRef.current.play();
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
       setIsPlaying(!isPlaying);
     } else {
       setCurrentSong(song);
@@ -76,29 +95,64 @@ export default function MusicPlayer() {
   }, [currentSong, isPlaying]);
 
   const deleteSong = async (songId, audioUrl) => {
-    if (!window.confirm("Delete?")) return;
-    await deleteObject(ref(storage, audioUrl));
-    await deleteDoc(doc(db, "songs", songId));
-    setSongs(songs.filter(s => s.id !== songId));
+    if (!window.confirm("Delete this song?")) return;
+    try {
+      await deleteObject(ref(storage, audioUrl));
+      await deleteDoc(doc(db, "songs", songId));
+      setSongs(songs.filter(s => s.id !== songId));
+      if (currentSong?.id === songId) {
+        audioRef.current.pause();
+        setCurrentSong(null);
+      }
+    } catch (err) {
+      console.error("Delete failed", err);
+    }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.glassCard}>
-        <h2 style={{ textAlign: 'center' }}>Public Music Player</h2>
-
+        <h2 style={{ textAlign: 'center', marginBottom: '10px' }}>🎶 My Library</h2>
+        
         <form onSubmit={uploadSong} style={styles.uploadForm}>
-          <input name="title" placeholder="Song Title" style={styles.input} required />
-          <input name="artist" placeholder="Artist" style={styles.input} required />
-          <input type="file" accept="audio/*" onChange={(e) => setFile(e.target.files[0])} style={styles.input} required />
-          <button style={styles.addButton}>Upload Song</button>
+          <label style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+            Metadata (Artist/Title) is detected automatically
+          </label>
+          <input 
+            type="file" 
+            accept="audio/*" 
+            onChange={(e) => setFile(e.target.files[0])} 
+            style={styles.input} 
+            disabled={isUploading}
+            required 
+          />
+          <button 
+            type="submit" 
+            style={{...styles.addButton, opacity: isUploading ? 0.5 : 1}} 
+            disabled={isUploading}
+          >
+            {isUploading ? "Processing..." : "Upload Song"}
+          </button>
         </form>
 
+        <div style={{ marginBottom: '15px' }}>
+            <input 
+                placeholder="Search your library..." 
+                style={styles.input} 
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+        </div>
+
         <ul style={styles.list}>
-          {songs.filter(s => s.title.toLowerCase().includes(searchTerm.toLowerCase())).map(song => (
+          {songs
+            .filter(s => s.title.toLowerCase().includes(searchTerm.toLowerCase()) || s.artist.toLowerCase().includes(searchTerm.toLowerCase()))
+            .map(song => (
             <li key={song.id} style={styles.listItem}>
               <div onClick={() => togglePlay(song)} style={{ flex: 1, cursor: 'pointer' }}>
-                {currentSong?.id === song.id && isPlaying ? "⏸ " : "▶ "} {song.title}
+                <div style={{ fontWeight: 'bold' }}>
+                    {currentSong?.id === song.id && isPlaying ? "⏸ " : "▶ "} {song.title}
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>{song.artist}</div>
               </div>
               <button onClick={() => deleteSong(song.id, song.audioUrl)} style={styles.deleteBtn}>✕</button>
             </li>
@@ -109,14 +163,3 @@ export default function MusicPlayer() {
     </div>
   );
 }
-
-const styles = {
-  container: { minHeight: "100vh", backgroundColor: "#0f172a", display: "flex", justifyContent: "center", alignItems: "center", color: "white", fontFamily: "sans-serif" },
-  glassCard: { width: "100%", maxWidth: "400px", background: "rgba(255,255,255,0.05)", padding: "20px", borderRadius: "20px", backdropFilter: "blur(10px)" },
-  uploadForm: { display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" },
-  input: { padding: "10px", borderRadius: "8px", border: "none", background: "rgba(255,255,255,0.1)", color: "white" },
-  addButton: { padding: "10px", backgroundColor: "#3b82f6", color: "white", borderRadius: "8px", border: "none", cursor: "pointer" },
-  list: { listStyle: "none", padding: 0 },
-  listItem: { display: "flex", padding: "10px", borderBottom: "1px solid rgba(255,255,255,0.1)" },
-  deleteBtn: { background: "none", border: "none", color: "red", cursor: "pointer" }
-};
