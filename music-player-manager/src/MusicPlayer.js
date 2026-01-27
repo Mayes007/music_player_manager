@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { db, storage } from "./firebase"; // Removed 'auth'
+import { db, storage } from "./firebase"; 
 import {
   collection, addDoc, getDocs, orderBy, query,
   deleteDoc, doc, updateDoc
