@@ -1,0 +1,103 @@
+/* Main container */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f8f9fb;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Page title */
+.title {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 20px;
+}
+
+/* Upload form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+/* Text inputs */
+.input {
+  padding: 10px;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+/* File input */
+.fileInput {
+  font-size: 0.95rem;
+}
+
+/* Buttons */
+.button {
+  padding: 10px;
+  font-size: 1rem;
+  background-color: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.button:hover {
+  background-color: #4338ca;
+}
+
+/* Song list */
+.songList {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Individual song card */
+.songCard {
+  background-color: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Song text */
+.songTitle {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.songArtist {
+  font-size: 0.95rem;
+  color: #555;
+}
+
+/* Audio player */
+.audio {
+  width: 100%;
+  margin-top: 5px;
+}
+
+/* Action buttons (play/delete/etc) */
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.deleteButton {
+  background-color: #dc2626;
+}
+
+.deleteButton:hover {
+  background-color: #b91c1c;
+}

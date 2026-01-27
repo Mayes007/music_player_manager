@@ -6,6 +6,8 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import * as mm from 'music-metadata-browser';
+// Add this at the very top of your imports
+import styles from './MusicPlayer.module.css';
 
 const songsRef = collection(db, "songs");
 
